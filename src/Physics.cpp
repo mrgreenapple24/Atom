@@ -111,21 +111,16 @@ float samplePhi(const QuantumState& state) {
 }
 
 glm::vec3 calculateProbabilityFlow(const Particle& p, const QuantumState& state) {
-    double r = glm::length(p.pos);
-    if (r < 1e-6) return glm::vec3(0.0f);
-    double theta = std::acos(p.pos.y / r);
-    double phi = std::atan2(p.pos.z, p.pos.x);
+    (void)p;
 
-    double sinTheta = std::sin(theta);
-    if (std::abs(sinTheta) < 1e-4) sinTheta = 1e-4;
-    double v_mag = state.hbar * state.m / (state.m_e * r * sinTheta);
+    std::uniform_real_distribution<float> dist(-0.5f, 0.5f);
+    float rx = dist(const_cast<QuantumState&>(state).gen);
+    float ry = dist(const_cast<QuantumState&>(state).gen);
+    float rz = dist(const_cast<QuantumState&>(state).gen);
 
-    double vx = -v_mag * std::sin(phi);
-    double vy = 0.0;
-    double vz = v_mag * std::cos(phi);
-
-    return glm::vec3((float)vx, (float)vy, (float)vz);
+    return glm::vec3(rx, ry, rz);
 }
+
 
 glm::vec4 heatmap_fire(float value) {
     value = std::max(0.0f, std::min(1.0f, value));
@@ -200,7 +195,16 @@ glm::vec4 inferno(double r, double theta, double phi, const QuantumState& state)
         }
     }
 
-    double angular = Plm * Plm;
+    double angularPart;
+
+    if (state.m > 0)
+        angularPart = Plm * std::cos(state.m * phi);
+    else if (state.m < 0)
+        angularPart = Plm * std::sin(std::abs(state.m) * phi);
+    else
+        angularPart = Plm;
+
+    double angular = angularPart * angularPart;
     double intensity = radial * angular;
 
     return heatmap_fire(intensity * 1.5 * std::pow(5, state.n));

@@ -76,20 +76,25 @@ int main() {
 
     Grid grid(renderer);
 
+    state.n = 3; state.l = 2; state.m = 0; // More complex orbital
     state.updateElectronR();
     Physics::generateParticles(particles, state);
     std::cout << "Generated " << particles.size() << " particles." << std::endl;
 
-    float dt = 0.5f;
     std::cout << "Starting simulation..." << std::endl;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    double lastTime = glfwGetTime();
     int frameCount = 0;
     while (!glfwWindowShouldClose(renderer.window)) {
+        double currentTime = glfwGetTime();
+        float deltaTime = (float)(currentTime - lastTime);
+        lastTime = currentTime;
+
         if (frameCount % 100 == 0) {
-            std::cout << "Frame: " << frameCount << std::endl;
+            std::cout << "Frame: " << frameCount << " | FPS: " << (1.0f / deltaTime) << std::endl;
         }
         frameCount++;
 
@@ -98,18 +103,25 @@ int main() {
 
         // ------ Update Probability current ------
         for (Particle& p : particles) {
-            double r = glm::length(p.pos);
-            if (r > 1e-6) {
-                double theta = std::acos(p.pos.y / r);
-                p.vel = Physics::calculateProbabilityFlow(p, state);
-                glm::vec3 temp_pos = p.pos + p.vel * dt;
-                double new_phi = std::atan2(temp_pos.z, temp_pos.x);
-                p.pos = Physics::sphericalToCartesian((float)r, (float)theta, (float)new_phi);
-            }
+            p.vel = Physics::calculateProbabilityFlow(p, state);
+            p.pos += p.vel * 0.1f; // Use a tuned constant for observable motion speed
         }
 
         // ------ Draw Particles ------
         renderer.drawSpheres(particles, camera, state);
+
+        // ------ Draw UI ------
+        int fbWidth, fbHeight;
+        glfwGetFramebufferSize(renderer.window, &fbWidth, &fbHeight);
+        float line_height = 20.0f;
+        float x_start = 10.0f;
+        float y_start = (float)fbHeight - 25.0f;
+
+        renderer.drawText("Controls:", x_start, y_start, 2.0f);
+        renderer.drawText("W/S: n = " + std::to_string(state.n), x_start, y_start - line_height * 1, 1.5f);
+        renderer.drawText("E/D: l = " + std::to_string(state.l), x_start, y_start - line_height * 2, 1.5f);
+        renderer.drawText("R/F: m = " + std::to_string(state.m), x_start, y_start - line_height * 3, 1.5f);
+        renderer.drawText("T/G: N = " + std::to_string(state.N), x_start, y_start - line_height * 4, 1.5f);
 
         glfwSwapBuffers(renderer.window);
         glfwPollEvents();

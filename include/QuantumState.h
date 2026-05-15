@@ -2,8 +2,8 @@
 #include <random>
 
 struct QuantumState {
-    int n = 4;
-    int l = 3;
+    int n = 3;
+    int l = 2;
     int m = 0;
     int N = 10000;
     float electron_r = 1.5f;

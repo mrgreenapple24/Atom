@@ -30,6 +30,7 @@ file(GLOB_RECURSE SRC_FILES
     src/*.c
 )
 list(APPEND SRC_FILES external/glad/src/glad.c)
+list(APPEND SRC_FILES src/Font.cpp)
 
 # =====================================================
 # Executable

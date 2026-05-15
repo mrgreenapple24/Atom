@@ -25,16 +25,23 @@ public:
     void init(Camera* camera, QuantumState* state);
     void setParticles(std::vector<Particle>* particles);
     void drawSpheres(const std::vector<Particle>& particles, const Camera& camera, const QuantumState& state);
+    void drawText(const std::string& text, float x, float y, float scale);
     void createVBOVAO(GLuint& VAO, GLuint& VBO, const std::vector<float>& vertices);
     void createVBOVAO(GLuint& VAO, GLuint& VBO, const float* vertices, size_t vertexCount);
 
     GLuint shaderProgram;
+    GLuint textShaderProgram;
     GLint modelLoc, viewLoc, projLoc, colorLoc;
+    GLint textProjLoc, textColorLoc;
 
 private:
     GLuint sphereVAO, sphereVBO;
     int sphereVertexCount;
 
+    GLuint textVAO, textVBO;
+    GLuint fontTexture;
+
     void setupShaders();
     void setupSphere();
+    void setupText();
 };

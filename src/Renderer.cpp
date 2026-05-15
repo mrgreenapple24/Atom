@@ -3,17 +3,22 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "Physics.h"
+#include "Font.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-Renderer::Renderer() : window(nullptr), shaderProgram(0), sphereVAO(0), sphereVBO(0), sphereVertexCount(0) {}
+Renderer::Renderer() : window(nullptr), shaderProgram(0), textShaderProgram(0), sphereVAO(0), sphereVBO(0), sphereVertexCount(0), textVAO(0), textVBO(0), fontTexture(0) {}
 
 Renderer::~Renderer() {
     if (shaderProgram) glDeleteProgram(shaderProgram);
+    if (textShaderProgram) glDeleteProgram(textShaderProgram);
     if (sphereVAO) glDeleteVertexArrays(1, &sphereVAO);
     if (sphereVBO) glDeleteBuffers(1, &sphereVBO);
+    if (textVAO) glDeleteVertexArrays(1, &textVAO);
+    if (textVBO) glDeleteBuffers(1, &textVBO);
+    if (fontTexture) glDeleteTextures(1, &fontTexture);
     if (window) {
         UserPointer* up = (UserPointer*)glfwGetWindowUserPointer(window);
         delete up;
@@ -77,6 +82,7 @@ void Renderer::init(Camera* camera, QuantumState* state) {
 
     setupShaders();
     setupSphere();
+    setupText();
 
     // Setup user pointer for callbacks
     UserPointer* up = new UserPointer{ camera, state, nullptr };
@@ -150,6 +156,50 @@ void Renderer::setupShaders() {
     viewLoc  = glGetUniformLocation(shaderProgram, "view");
     projLoc  = glGetUniformLocation(shaderProgram, "projection");
     colorLoc = glGetUniformLocation(shaderProgram, "objectColor");
+
+    // Text shader
+    const char* textVShaderCode = R"glsl(
+        #version 330 core
+        layout(location=0) in vec4 vertex; // <vec2 pos, vec2 tex>
+        out vec2 TexCoords;
+        uniform mat4 projection;
+        void main() {
+            gl_Position = projection * vec4(vertex.xy, 0.0, 1.0);
+            TexCoords = vertex.zw;
+        } )glsl";
+
+    const char* textFShaderCode = R"glsl(
+        #version 330 core
+        in vec2 TexCoords;
+        out vec4 color;
+        uniform sampler2D text;
+        uniform vec3 textColor;
+        void main() {    
+            vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoords).r);
+            color = vec4(textColor, 1.0) * sampled;
+        } )glsl";
+
+    GLuint textVertex = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(textVertex, 1, &textVShaderCode, NULL);
+    glCompileShader(textVertex);
+    checkShaderCompile(textVertex, "TEXT_VERTEX");
+
+    GLuint textFragment = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(textFragment, 1, &textFShaderCode, NULL);
+    glCompileShader(textFragment);
+    checkShaderCompile(textFragment, "TEXT_FRAGMENT");
+
+    textShaderProgram = glCreateProgram();
+    glAttachShader(textShaderProgram, textVertex);
+    glAttachShader(textShaderProgram, textFragment);
+    glLinkProgram(textShaderProgram);
+    checkProgramLink(textShaderProgram);
+
+    glDeleteShader(textVertex);
+    glDeleteShader(textFragment);
+
+    textProjLoc = glGetUniformLocation(textShaderProgram, "projection");
+    textColorLoc = glGetUniformLocation(textShaderProgram, "textColor");
 }
 
 void Renderer::setupSphere() {
@@ -193,6 +243,80 @@ void Renderer::createVBOVAO(GLuint& VAO, GLuint& VBO, const float* vertices, siz
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
+}
+
+void Renderer::setupText() {
+    glGenVertexArrays(1, &textVAO);
+    glGenBuffers(1, &textVBO);
+    glBindVertexArray(textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    // Create font texture
+    unsigned char font_pixels[128 * 8 * 8];
+    for (int char_idx = 0; char_idx < 128; char_idx++) {
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                // Reverse bit order to fix lateral flip (bit 7 is left)
+                bool pixel = (font8x8_basic[char_idx][row] >> (7 - col)) & 1;
+                font_pixels[char_idx * 64 + row * 8 + col] = pixel ? 255 : 0;
+            }
+        }
+    }
+
+    glGenTextures(1, &fontTexture);
+    glBindTexture(GL_TEXTURE_2D, fontTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 8, 128 * 8, 0, GL_RED, GL_UNSIGNED_BYTE, font_pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+}
+
+void Renderer::drawText(const std::string& text, float x, float y, float scale) {
+    glUseProgram(textShaderProgram);
+    glUniform3f(textColorLoc, 1.0f, 1.0f, 1.0f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, fontTexture);
+    glBindVertexArray(textVAO);
+
+    int fbWidth, fbHeight;
+    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+    glm::mat4 projection = glm::ortho(0.0f, (float)fbWidth, 0.0f, (float)fbHeight);
+    glUniformMatrix4fv(textProjLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+    float x_offset = x;
+    for (char c : text) {
+        float xpos = x_offset;
+        float ypos = y;
+        float w = 8.0f * scale;
+        float h = 8.0f * scale;
+
+        float ty = (float)(c) / 128.0f;
+        float th = 1.0f / 128.0f;
+
+        float vertices[6][4] = {
+            { xpos,     ypos + h,   0.0f, ty },            
+            { xpos,     ypos,       0.0f, ty + th },
+            { xpos + w, ypos,       1.0f, ty + th },
+
+            { xpos,     ypos + h,   0.0f, ty },
+            { xpos + w, ypos,       1.0f, ty + th },
+            { xpos + w, ypos + h,   1.0f, ty }           
+        };
+
+        glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); 
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        x_offset += w;
+    }
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Renderer::drawSpheres(const std::vector<Particle>& particles, const Camera& camera, const QuantumState& state) {
