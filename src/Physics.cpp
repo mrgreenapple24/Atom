@@ -221,15 +221,18 @@ void generateParticles(std::vector<Particle>& particles, QuantumState& state) {
     particles.clear();
     particles.reserve(state.N);
     for (int i = 0; i < state.N; ++i) {
-        float r_val = (float)sampleR(state);
-        float theta_val = (float)sampleTheta(state);
-        float phi_val = samplePhi(state);
-
-        glm::vec3 pos = sphericalToCartesian(r_val, theta_val, phi_val);
-
-        glm::vec4 col = inferno(r_val, theta_val, phi_val, state);
-        particles.emplace_back(pos, col);
+        particles.push_back(sampleParticle(state));
     }
+}
+
+Particle sampleParticle(const QuantumState& state) {
+    float r_val = (float)sampleR(state);
+    float theta_val = (float)sampleTheta(state);
+    float phi_val = samplePhi(state);
+
+    glm::vec3 pos = sphericalToCartesian(r_val, theta_val, phi_val);
+    glm::vec4 col = inferno(r_val, theta_val, phi_val, state);
+    return Particle(pos, col);
 }
 
 } // namespace Physics

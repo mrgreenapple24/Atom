@@ -15,4 +15,5 @@ namespace Physics {
 
     glm::vec3 sphericalToCartesian(float r, float theta, float phi);
     void generateParticles(std::vector<Particle>& particles, QuantumState& state);
+    Particle sampleParticle(const QuantumState& state);
 }

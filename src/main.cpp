@@ -12,7 +12,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 
     UserPointer* up = (UserPointer*)glfwGetWindowUserPointer(window);
     QuantumState& state = *up->state;
-    std::vector<Particle>& particles = *up->particles;
 
     bool updated = false;
 
@@ -53,7 +52,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         if (state.m < -state.l) state.m = -state.l;
 
         state.updateElectronR();
-        Physics::generateParticles(particles, state);
+        // Gradual update will happen in the main loop, so we don't call generateParticles here anymore
         std::cout << "Quantum numbers updated: n=" << state.n << " l=" << state.l << " m=" << state.m << " N=" << state.N << "\n";
     }
 }
@@ -104,7 +103,27 @@ int main() {
         // ------ Update Probability current ------
         for (Particle& p : particles) {
             p.vel = Physics::calculateProbabilityFlow(p, state);
-            p.pos += p.vel * 0.1f; // Use a tuned constant for observable motion speed
+            p.pos += p.vel * 0.1f;
+        }
+
+        // ------ Gradual Transition (Resampling) ------
+        // Replace ~2% of particles per frame for a smooth "morph" effect
+        size_t replaceCount = particles.empty() ? 0 : particles.size() / 50;
+        if (replaceCount < 1) replaceCount = 1;
+        
+        std::uniform_int_distribution<size_t> indexDist(0, particles.size() - 1);
+        for (size_t i = 0; i < replaceCount; ++i) {
+            size_t idx = indexDist(state.gen);
+            particles[idx] = Physics::sampleParticle(state);
+        }
+
+        // Sync particle count if N changed via UI
+        if (particles.size() < (size_t)state.N) {
+            for (int i = 0; i < 500 && particles.size() < (size_t)state.N; ++i) {
+                particles.push_back(Physics::sampleParticle(state));
+            }
+        } else if (particles.size() > (size_t)state.N) {
+            particles.resize(state.N);
         }
 
         // ------ Draw Particles ------
