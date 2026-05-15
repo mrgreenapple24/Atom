@@ -52,7 +52,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         if (state.m < -state.l) state.m = -state.l;
 
         state.updateElectronR();
-        // Gradual update will happen in the main loop, so we don't call generateParticles here anymore
         std::cout << "Quantum numbers updated: n=" << state.n << " l=" << state.l << " m=" << state.m << " N=" << state.N << "\n";
     }
 }
@@ -107,10 +106,9 @@ int main() {
         }
 
         // ------ Gradual Transition (Resampling) ------
-        // Replace ~2% of particles per frame for a smooth "morph" effect
         size_t replaceCount = particles.empty() ? 0 : particles.size() / 50;
         if (replaceCount < 1) replaceCount = 1;
-        
+
         std::uniform_int_distribution<size_t> indexDist(0, particles.size() - 1);
         for (size_t i = 0; i < replaceCount; ++i) {
             size_t idx = indexDist(state.gen);
